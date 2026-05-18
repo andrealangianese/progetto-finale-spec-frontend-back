@@ -1,0 +1,24 @@
+{
+  "name": "progettino-finale-spec-frontend-back",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "build-schema": "node build-schema.js",
+    "start": "npm run build-schema && node server.js",
+    "dev": "npm run build-schema && node --watch server.js"
+  },
+  "type": "module",
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "morgan": "^1.10.0",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.2"
+  }
+}
