@@ -1,0 +1,278 @@
+[
+  {
+    "title": "Trekking e Bivacco d'Alta Quota sull'Himalaya",
+    "category": "Trekking",
+    "destination": "Nepal",
+    "durationDay": 14,
+    "price": 2450,
+    "difficulty": "Estremo",
+    "adrenalineLevel": 5,
+    "image": "https://images.unsplash.com/photo-1544735716-392fe2489ffa?q=80&w=600",
+    "description": "Un'avventura totale tra i colossi di ghiaccio del mondo. Camminerai fino ai campi base d'alta quota, dormendo in tenda sotto un cielo stellato indimenticabile e sfidando l'altitudine.",
+    "requiredEquipment": [
+      "Sacco a pelo da spedizione (-20°C)",
+      "Scarponi da alta montagna",
+      "Piumino tecnico",
+      "Pastiglie per purificare l'acqua"
+    ],
+    "id": 1,
+    "createdAt": "2026-05-19T10:07:31.514Z",
+    "updatedAt": "2026-05-19T10:07:31.514Z"
+  },
+  {
+    "title": "Volo in Mongolfiera all'Alba sopra le Rocce Fatate",
+    "category": "Esperienziale",
+    "destination": "Turchia (Cappadocia)",
+    "durationDay": 3,
+    "price": 450,
+    "difficulty": "Facile",
+    "adrenalineLevel": 2,
+    "image": "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?q=80&w=600",
+    "description": "Fluttua dolcemente nel vento mentre il sole sorge e illumina i camini delle fate e le valli della Cappadocia, circondato da centinaia di palloni colorati.",
+    "requiredEquipment": [
+      "Giacca a vento leggera",
+      "Fotocamera con zoom",
+      "Abbigliamento a strati"
+    ],
+    "id": 2,
+    "createdAt": "2026-05-19T11:40:54.792Z",
+    "updatedAt": "2026-05-19T11:40:54.792Z"
+  },
+  {
+    "title": "Spedizione Aurora Boreale e Ghiacciai",
+    "category": "Invernale",
+    "destination": "Islanda",
+    "durationDay": 7,
+    "price": 1890,
+    "difficulty": "Intermedio",
+    "adrenalineLevel": 3,
+    "image": "https://images.unsplash.com/photo-1531366936337-7c912a4589a7?q=80&w=600",
+    "description": "Esplora grotte di ghiaccio blu durante il giorno e avventurati nelle fredde notti islandesi a caccia delle magiche luci verdi dell'Aurora Boreale.",
+    "requiredEquipment": [
+      "Abbigliamento termico merino",
+      "Scarponi impermeabili",
+      "Treppiede per fotocamera",
+      "Cramponi da ghiaccio"
+    ],
+    "id": 3,
+    "createdAt": "2026-05-19T11:41:14.667Z",
+    "updatedAt": "2026-05-19T11:41:14.667Z"
+  },
+  {
+    "title": "Immersione nella Grande Barriera Corallina Remota",
+    "category": "Subacquea",
+    "destination": "Australia (Lizard Island)",
+    "durationDay": 5,
+    "price": 1600,
+    "difficulty": "Intermedio",
+    "adrenalineLevel": 4,
+    "image": "https://images.unsplash.com/photo-1544551763-46a013bb70d5?q=80&w=600",
+    "description": "Nuota a contatto con tartarughe marine, squali di barriera e una biodiversità di coralli unica al mondo in uno dei punti più incontaminati dell'oceano.",
+    "requiredEquipment": [
+      "Brevetto Open Water",
+      "Computer da sub",
+      "Muta 3mm",
+      "Maschera personale"
+    ],
+    "id": 4,
+    "createdAt": "2026-05-19T11:41:32.739Z",
+    "updatedAt": "2026-05-19T11:41:32.739Z"
+  },
+  {
+    "title": "Downhill e Mountain-Bike nelle Foreste di Whistler",
+    "category": "Biker",
+    "destination": "Canada",
+    "durationDay": 6,
+    "price": 1350,
+    "difficulty": "Difficile",
+    "adrenalineLevel": 5,
+    "image": "https://images.unsplash.com/photo-1544192240-4a34fed0104c?q=80&w=600",
+    "description": "Affronta i leggendari singletrack canadesi immerso nei boschi della Columbia Britannica. Radici, rocce e discese mozzafiato per veri amanti delle due ruote.",
+    "requiredEquipment": [
+      "Casco integrale",
+      "Protezioni per ginocchia e gomiti",
+      "Guanti da bici",
+      "Zaino idrico"
+    ],
+    "id": 5,
+    "createdAt": "2026-05-19T11:41:43.281Z",
+    "updatedAt": "2026-05-19T11:41:43.281Z"
+  },
+  {
+    "title": "Surf Camp sulle Onde di Byron Bay",
+    "category": "Surf",
+    "destination": "Australia",
+    "durationDay": 8,
+    "price": 980,
+    "difficulty": "Intermedio",
+    "adrenalineLevel": 4,
+    "image": "https://images.unsplash.com/photo-1502680390469-be75c86b636f?q=80&w=600",
+    "description": "Cavalca alcune delle onde più famose del pianeta. Giornate intere in acqua guidati da istruttori pro, e serate falò sulla spiaggia in puro stile surfista.",
+    "requiredEquipment": [
+      "Protezione solare 50+ zinco",
+      "Lycra anti-sfregamento",
+      "Wax (Cera per tavola)"
+    ],
+    "id": 6,
+    "createdAt": "2026-05-19T11:41:57.612Z",
+    "updatedAt": "2026-05-19T11:41:57.612Z"
+  },
+  {
+    "title": "Sci Alpinismo e Freeride con Vista Fiordo",
+    "category": "Invernale",
+    "destination": "Norvegia (Isole Lofoten)",
+    "durationDay": 6,
+    "price": 2100,
+    "difficulty": "Difficile",
+    "adrenalineLevel": 4,
+    "image": "https://images.unsplash.com/photo-1551698618-1dfe5d97d256?q=80&w=600",
+    "description": "Un'experience surreale: sali con le pelli di foca su picchi innevati che si tuffano direttamente nell'Oceano Atlantico e scia in neve fresca guardando il mare.",
+    "requiredEquipment": [
+      "Sci da alpinismo o Splitboard",
+      "Kit ARTVA (Pala e Sonda)",
+      "Pelli di foca",
+      "Guscio in Gore-Tex"
+    ],
+    "id": 7,
+    "createdAt": "2026-05-19T11:42:09.597Z",
+    "updatedAt": "2026-05-19T11:42:09.597Z"
+  },
+  {
+    "title": "Rafting Estremo nelle Gole del Fiume Futaleufú",
+    "category": "Water Sports",
+    "destination": "Cile (Patagonia)",
+    "durationDay": 5,
+    "price": 1150,
+    "difficulty": "Estremo",
+    "adrenalineLevel": 5,
+    "image": "https://images.unsplash.com/photo-1530866495561-507c9faab2ed?q=80&w=600",
+    "description": "Sfida le rapids di classe IV e V di uno dei fiumi d'acqua dolce più tumultuosi, limpidi e spettacolari del mondo, circondato dalla natura selvaggia della Patagonia.",
+    "requiredEquipment": [
+      "Muta stagna",
+      "Scarpe da scoglio",
+      "Corda da lancio di sicurezza"
+    ],
+    "id": 8,
+    "createdAt": "2026-05-19T11:42:20.300Z",
+    "updatedAt": "2026-05-19T11:42:20.300Z"
+  },
+  {
+    "title": "Il Cammino di Santiago di Compostela (Tratto Francese)",
+    "category": "Trekking",
+    "destination": "Spagna",
+    "durationDay": 10,
+    "price": 500,
+    "difficulty": "Intermedio",
+    "adrenalineLevel": 1,
+    "image": "https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?q=80&w=600",
+    "description": "Un viaggio lento dello spirit e del corpo. Chilometri di sentieri storici, foreste e piccoli villaggi, condividendo storie e ostelli con pellegrini da tutto il mondo.",
+    "requiredEquipment": [
+      "Zaino da 40L leggero",
+      "Scarpe da trail running collaudate",
+      "Calze anti-vesciche",
+      "Credenziale del pellegrino"
+    ],
+    "id": 9,
+    "createdAt": "2026-05-19T11:42:30.740Z",
+    "updatedAt": "2026-05-19T11:42:30.740Z"
+  },
+  {
+    "title": "Safari in Jeep e Trekking alle pendici del Kilimangiaro",
+    "category": "Trekking",
+    "destination": "Tanzania",
+    "durationDay": 9,
+    "price": 2890,
+    "difficulty": "Intermedio",
+    "adrenalineLevel": 3,
+    "image": "https://images.unsplash.com/photo-1516426122078-c23e76319801?q=80&w=600",
+    "description": "Esplora i parchi nazionali più famosi d'Africa a bordo di una jeep 4x4 avvistando i 'Big Five', per poi dedicare le ultime giornate a un trekking guidato sulle pendici della montagna più alta d'Africa.",
+    "requiredEquipment": [
+      "Cappello da deserto",
+      "Binocolo professionale",
+      "Abbigliamento color kaki",
+      "Scarponcini da trekking leggeri"
+    ],
+    "id": 10,
+    "createdAt": "2026-05-19T11:42:40.780Z",
+    "updatedAt": "2026-05-19T11:42:40.780Z"
+  },
+  {
+    "title": "Corso di Arrampicata e Vie Ferrate sulle Dolomiti",
+    "category": "Arrampicata",
+    "destination": "Italia (Cortina d'Ampezzo)",
+    "durationDay": 4,
+    "price": 680,
+    "difficulty": "Difficile",
+    "adrenalineLevel": 4,
+    "image": "https://images.unsplash.com/photo-1601564261175-d3fe4e53f1c2?q=80&w=600",
+    "description": "Sfida la gravità sulle pareti verticali di roccia calcarea più belle d'Europa. Accompagnato da guide alpine certificate, imparerai le tecniche di sicurezza e supererai spettacolari vie ferrate storiche.",
+    "requiredEquipment": [
+      "Imbrago omologato",
+      "Kit da ferrata con dissipatore",
+      "Casco da roccia",
+      "Scarpette da arrampicata"
+    ],
+    "id": 11,
+    "createdAt": "2026-05-19T11:42:53.433Z",
+    "updatedAt": "2026-05-19T11:42:53.433Z"
+  },
+  {
+    "title": "Spedizione in Kayak da Mare tra i Fiordi Silenziosi",
+    "category": "Water Sports",
+    "destination": "Groenlandia",
+    "durationDay": 8,
+    "price": 3200,
+    "difficulty": "Estremo",
+    "adrenalineLevel": 4,
+    "image": "https://images.unsplash.com/photo-1541414779247-5e86d5e6ed95?q=80&w=600",
+    "description": "Pagaia nel silenzio surreale dell'Artico schivando piccoli iceberg e navigando a fianco di imponenti ghiacciai millenari, accampandoti la notte in baie selvagge e remote.",
+    "requiredEquipment": [
+      "Muta stagna in neoprene spessa",
+      "Guanti termici da kayak",
+      "Sacco a pelo impermeabile",
+      "Borsa stagna da 20L"
+    ],
+    "id": 12,
+    "createdAt": "2026-05-19T11:43:02.757Z",
+    "updatedAt": "2026-05-19T11:43:02.757Z"
+  },
+  {
+    "title": "Sandboard e Notte Stellata nel Deserto di Atacama",
+    "category": "Esperienziale",
+    "destination": "Cile",
+    "durationDay": 5,
+    "price": 850,
+    "difficulty": "Facile",
+    "adrenalineLevel": 3,
+    "image": "https://images.unsplash.com/photo-1509316975850-ff9c5deb0cd9?q=80&w=600",
+    "description": "Scivola giù ad altissima velocità dalle dune giganti di sabbia con una tavola da sandboard e concludi la giornata dormendo in un campo tendato nel deserto più arido del pianeta, rinomato per l'osservazione delle stelle.",
+    "requiredEquipment": [
+      "Occhiali da sole protettivi avvolgenti",
+      "Bandana anti-sabbia",
+      "Crema solare 50+",
+      "Torcia frontale"
+    ],
+    "id": 13,
+    "createdAt": "2026-05-19T11:43:14.306Z",
+    "updatedAt": "2026-05-19T11:43:14.306Z"
+  },
+  {
+    "title": "Esplorazione e Snorkeling nei Cenotes Sacri Maya",
+    "category": "Subacquea",
+    "destination": "Messico (Yucatán)",
+    "durationDay": 6,
+    "price": 1100,
+    "difficulty": "Facile",
+    "adrenalineLevel": 3,
+    "image": "https://images.unsplash.com/photo-1568515045052-f9a854d70bfd?q=80&w=600",
+    "description": "Immergiti nelle acque dolci e limpidissime delle grotte sotterranee venerate dall'antico popolo Maya. Rimarrai estasiato dai giochi di luce solare che penetrano attraverso le radici degli alberi.",
+    "requiredEquipment": [
+      "Maschera e boccaglio (Snorkel)",
+      "Scarpette in gomma per scogli",
+      "Fotocamera subacquea"
+    ],
+    "id": 14,
+    "createdAt": "2026-05-19T11:44:25.544Z",
+    "updatedAt": "2026-05-19T11:44:25.544Z"
+  }
+]
