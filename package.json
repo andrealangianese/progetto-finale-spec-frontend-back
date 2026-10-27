@@ -5,7 +5,8 @@
   "scripts": {
     "build-schema": "node build-schema.js",
     "start": "npm run build-schema && node server.js",
-    "dev": "npm run build-schema && node --watch server.js"
+    "dev": "npm run build-schema && node --watch server.js",
+    "test": "node --test \"test/**/*.test.js\""
   },
   "type": "module",
   "keywords": [],
@@ -19,6 +20,7 @@
     "zod": "^3.22.4"
   },
   "devDependencies": {
+    "supertest": "^7.1.4",
     "typescript": "^5.8.2"
   }
 }

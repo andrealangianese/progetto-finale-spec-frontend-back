@@ -13,7 +13,8 @@ const __dirname = path.dirname(__filename);
 // Su Vercel il filesystem di /var/task è di sola lettura: si scrive solo in /tmp
 const IS_VERCEL = !!process.env.VERCEL;
 const SRC_DB_DIR = path.join(__dirname, 'database');        // file iniziali (sola lettura su Vercel)
-const DB_DIR = IS_VERCEL ? '/tmp/database' : SRC_DB_DIR;    // cartella scrivibile
+// DATA_DIR permette di puntare a una cartella diversa (es. una copia temporanea nei test)
+const DB_DIR = process.env.DATA_DIR || (IS_VERCEL ? '/tmp/database' : SRC_DB_DIR);    // cartella scrivibile
 
 const app = express();
 const PORT = 3001;
@@ -113,8 +114,8 @@ const loadData = async (type) => {
             console.log(`Directory del database creata.`);
         }
 
-        // Su Vercel copia il file iniziale in /tmp al primo avvio
-        if (IS_VERCEL && !existsSync(dataFile) && existsSync(srcFile)) {
+        // Se la cartella dati non è quella sorgente (Vercel, test) parte da una copia dei dati iniziali
+        if (DB_DIR !== SRC_DB_DIR && !existsSync(dataFile) && existsSync(srcFile)) {
             await fs.copyFile(srcFile, dataFile);
         }
 
@@ -342,7 +343,10 @@ app.use((err, req, res, next) => {
     res.status(500).json({ success: false, error: err.message });
 });
 
-if (!IS_VERCEL) {
+// Avvio solo se eseguito direttamente (node server.js), non quando importato (Vercel, test)
+const isEntryPoint = process.argv[1] && path.resolve(process.argv[1]) === __filename;
+
+if (!IS_VERCEL && isEntryPoint) {
     // Avvio locale
     ready
         .then(() => {
@@ -361,5 +365,6 @@ if (!IS_VERCEL) {
         });
 }
 
-// Vercel usa l'app esportata come handler
+// Vercel usa l'app esportata come handler; i test attendono `ready` prima delle richieste
+export { ready };
 export default app;
