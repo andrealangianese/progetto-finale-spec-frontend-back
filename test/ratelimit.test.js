@@ -1,9 +1,10 @@
-import { test, before } from "node:test"
+import { test, before, after } from "node:test"
 import assert from "node:assert/strict"
 import request from "supertest"
-import { loadApp, validTravel } from "./helpers.js"
+import { closeApp, loadApp, validTravel } from "./helpers.js"
 
 let app
+after(closeApp)
 before(async () => { app = await loadApp({ RATE_LIMIT_READ: "5", RATE_LIMIT_WRITE: "2" }) })
 
 test("oltre il limite di letture → 429", async () => {

@@ -1,12 +1,12 @@
 import { test, before, after } from "node:test"
 import assert from "node:assert/strict"
 import request from "supertest"
-import { API_KEY, loadApp, validTravel } from "./helpers.js"
+import { API_KEY, closeApp, loadApp, validTravel } from "./helpers.js"
 import { asyncHandler } from "../lib/security.js"
 
 let app
+after(closeApp)
 before(async () => { app = await loadApp({ ALLOWED_ORIGINS: "https://langiaroad.app" }) })
-after(() => { delete process.env.VERCEL })
 
 test("scrittura senza chiave → 401 con WWW-Authenticate", async () => {
     const res = await request(app).post("/travels").send(validTravel).expect(401)

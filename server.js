@@ -1,11 +1,10 @@
 import express from "express";
-import fs from "fs/promises";
-import { existsSync } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import cors from "cors";
 import morgan from "morgan";
 import { validators, readonlyProperties } from './schema.js';
+import { createStore } from './lib/storage/index.js';
 import {
     asyncHandler, corsOptions, errorHandler, notFoundHandler,
     rateLimiters, requireApiKey, securityHeaders,
@@ -43,21 +42,22 @@ app.use(limiters.read);
 // Limite sul body: protegge da payload enormi (body-parser recente rifiuta 'Infinity')
 app.use(express.json({ limit: '100kb' }));
 
-// Aspetta che i dati siano caricati prima di rispondere
+// Aspetta che i dati siano caricati (e, con Postgres, aggiornati) prima di rispondere
 app.use(async (req, res, next) => {
     try {
         await ready;
+        await refreshIfStale();
         next();
     } catch (e) {
         next(e);
     }
 });
 
+// **Storage**: file JSON in locale, Postgres se è impostata DATABASE_URL
+const store = createStore({ dataDir: DB_DIR, seedDir: SRC_DB_DIR });
+
 // **CACHE in memoria** for each resource type
 const cache = {};
-
-// **Coda per scritture asincrone** for each resource type
-const writeQueues = {};
 
 // Helper to get plural form (basic pluralization rules)
 function getPlural(singular) {
@@ -73,21 +73,10 @@ function getPlural(singular) {
 // Extract resource types from validators
 const resourceTypes = Object.keys(validators);
 
-// Initialize cache and write queues for each resource type
+// Initialize cache for each resource type
 resourceTypes.forEach(type => {
     cache[type] = [];
-    writeQueues[type] = [];
 });
-
-// **Gestore della coda di scrittura**
-const processWriteQueue = async (type) => {
-    if (writeQueues[type].length === 0) return;
-    const task = writeQueues[type].shift(); // Prende la prima operazione in coda
-    await task(); // Esegue l'operazione
-    if (writeQueues[type].length > 0) {
-        setImmediate(() => processWriteQueue(type)); // Continua con la prossima operazione
-    }
-};
 
 // Helper function to format validation errors in a readable way
 function formatValidationErrors(errors) {
@@ -111,99 +100,50 @@ function formatValidationErrors(errors) {
     return formattedMessage;
 }
 
-// **Caricare i dati all'avvio**
+// **Caricare e validare i dati** (all'avvio e, con Postgres, quando la cache scade)
 const loadData = async (type) => {
-    const dbDir = DB_DIR;
-    const dataFile = path.join(dbDir, `${type}.json`);
-    const srcFile = path.join(SRC_DB_DIR, `${type}.json`);
-    try {
-        // Check if database directory exists, create it if not
-        if (!existsSync(dbDir)) {
-            await fs.mkdir(dbDir, { recursive: true });
-            console.log(`Directory del database creata.`);
-        }
+    const loadedData = await store.load(type);
 
-        // Se la cartella dati non è quella sorgente (Vercel, test) parte da una copia dei dati iniziali
-        if (DB_DIR !== SRC_DB_DIR && !existsSync(dataFile) && existsSync(srcFile)) {
-            await fs.copyFile(srcFile, dataFile);
-        }
-
-        if (existsSync(dataFile)) {
-            const data = await fs.readFile(dataFile, "utf-8");
-            if (data.trim()) {
-                try {
-                    const loadedData = JSON.parse(data);
-
-                    // Verifica che i dati caricati siano in formato array
-                    if (!Array.isArray(loadedData)) {
-                        throw new Error(`Errore di struttura nel file ${type}.json: il file deve contenere un array.`);
-                    } else {
-                        // Valida ogni elemento nell'array usando il validator appropriato
-                        const validator = validators[type];
-                        const invalidItems = [];
-
-                        for (let i = 0; i < loadedData.length; i++) {
-                            const item = loadedData[i];
-                            const validationResult = validator(item);
-                            if (!validationResult.valid) {
-                                invalidItems.push({
-                                    index: i,
-                                    id: item.id || 'sconosciuto',
-                                    errors: validationResult.errors
-                                });
-                            }
-                        }
-
-                        if (invalidItems.length > 0) {
-                            let errorMessage = `\n⛔ Errori di validazione nel file ${type}.json. Il server non può partire.\n`;
-
-                            invalidItems.forEach(item => {
-                                errorMessage += `\n🚫 Elemento #${item.index + 1} (ID: ${item.id}) non valido:`;
-                                errorMessage += formatValidationErrors(item.errors);
-                                errorMessage += "\n";
-                            });
-
-                            errorMessage += `\nCorreggi questi errori nel file database/${type}.json per avviare il server.`;
-                            throw new Error(errorMessage);
-                        }
-
-                        cache[type] = loadedData;
-                    }
-                } catch (parseError) {
-                    throw new Error(`Errore di sintassi JSON nel file ${type}.json:\n${parseError.message}\nControlla la sintassi del file e assicurati che sia un JSON valido.`);
-                }
-            } else {
-                cache[type] = [];
-            }
-        } else {
-            cache[type] = [];
-            await saveData(type); // Create empty file
-            console.log(`Creato file dati vuoto per ${type}.`);
-        }
-    } catch (error) {
-        // Rilancia l'errore per gestirlo nel Promise.all
-        throw error;
+    // Verifica che i dati caricati siano in formato array
+    if (!Array.isArray(loadedData)) {
+        throw new Error(`Errore di struttura nei dati di ${type}: deve essere un array.`);
     }
-};
 
-// **Salvare i dati nel file (usando la coda)**
-const saveData = async (type) => {
-    return new Promise((resolve) => {
-        writeQueues[type].push(async () => {
-            try {
-                const dataFile = path.join(DB_DIR, `${type}.json`);
-                await fs.writeFile(dataFile, JSON.stringify(cache[type], null, 2), "utf-8");
-                console.log(`Dati salvati in ${type}.json.`);
-            } catch (error) {
-                console.error(`⚠️ Errore nel salvare i dati per ${type}:`, error);
-            }
-            resolve();
-        });
-        if (writeQueues[type].length === 1) {
-            processWriteQueue(type); // Avvia la scrittura solo se la coda era vuota
+    // Valida ogni elemento nell'array usando il validator appropriato
+    const validator = validators[type];
+    const invalidItems = [];
+    loadedData.forEach((item, i) => {
+        const validationResult = validator(item);
+        if (!validationResult.valid) {
+            invalidItems.push({ index: i, id: item.id || 'sconosciuto', errors: validationResult.errors });
         }
     });
+
+    if (invalidItems.length > 0) {
+        let errorMessage = `\n⛔ Errori di validazione nei dati di ${type}. Il server non può partire.\n`;
+        invalidItems.forEach(item => {
+            errorMessage += `\n🚫 Elemento #${item.index + 1} (ID: ${item.id}) non valido:`;
+            errorMessage += formatValidationErrors(item.errors);
+            errorMessage += "\n";
+        });
+        errorMessage += `\nCorreggi questi errori nei dati di ${type} per avviare il server.`;
+        throw new Error(errorMessage);
+    }
+
+    cache[type] = loadedData;
 };
+
+// Con uno storage condiviso (Postgres) più istanze serverless hanno ognuna la propria cache:
+// la ricarico al massimo ogni refreshTtlMs (consistenza eventuale). Una sola ricarica alla volta.
+let lastLoadAt = Date.now();
+let refreshing = null;
+async function refreshIfStale() {
+    if (!store.refreshTtlMs || Date.now() - lastLoadAt < store.refreshTtlMs) return;
+    refreshing ??= Promise.all(resourceTypes.map(loadData))
+        .then(() => { lastLoadAt = Date.now(); })
+        .finally(() => { refreshing = null; });
+    await refreshing;
+}
 
 // Dynamically create routes for each resource type
 const loadPromises = resourceTypes.map(type => {
@@ -220,14 +160,18 @@ const loadPromises = resourceTypes.map(type => {
             });
         }
 
-        const newItem = req.body;
+        // Uso i dati validati dallo schema, non il body grezzo
+        const newItem = { ...validationResult.data };
         // Creazione ID univoco
         newItem.id = (cache[type].length > 0 ? Math.max(...cache[type].map((t) => parseInt(t.id) || 0)) + 1 : 1);
         const creationDate = new Date();
         newItem.createdAt = creationDate.toISOString();
         newItem.updatedAt = creationDate.toISOString();
-        cache[type].push(newItem);
-        await saveData(type);
+
+        // Prima salvo, poi aggiorno la cache: se lo storage fallisce la cache resta coerente
+        const nextItems = [...cache[type], newItem];
+        await store.persist(type, { op: 'insert', item: newItem }, nextItems);
+        cache[type] = nextItems;
         res.status(201).json({ success: true, [type]: newItem });
     }));
 
@@ -292,14 +236,12 @@ const loadPromises = resourceTypes.map(type => {
 
         // Update timestamp and merge changes with existing item
         const now = new Date().toISOString();
-        cache[type][itemIndex] = {
-            ...cache[type][itemIndex],
-            ...updatedFields,
-            updatedAt: now
-        };
+        const updatedItem = { ...oldItem, ...updatedFields, updatedAt: now };
 
-        await saveData(type);
-        res.json({ success: true, [type]: cache[type][itemIndex] });
+        const nextItems = cache[type].map((p, i) => (i === itemIndex ? updatedItem : p));
+        await store.persist(type, { op: 'update', item: updatedItem }, nextItems);
+        cache[type] = nextItems;
+        res.json({ success: true, [type]: updatedItem });
     }));
 
     // 📌 **DELETE /:resource/:id - Delete a resource**
@@ -310,8 +252,8 @@ const loadPromises = resourceTypes.map(type => {
             return res.status(404).json({ success: false, message: `${type} with id '${itemId}' not found.` });
         }
 
+        await store.persist(type, { op: 'delete', id: itemId }, filteredItems);
         cache[type] = filteredItems;
-        await saveData(type);
         res.json({ success: true });
     }));
 
@@ -373,5 +315,5 @@ if (!IS_VERCEL && isEntryPoint) {
 }
 
 // Vercel usa l'app esportata come handler; i test attendono `ready` prima delle richieste
-export { ready };
+export { ready, store };
 export default app;

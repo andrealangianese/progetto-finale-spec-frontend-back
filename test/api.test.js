@@ -1,10 +1,11 @@
-import { test, before } from "node:test"
+import { test, before, after } from "node:test"
 import assert from "node:assert/strict"
 import request from "supertest"
-import { API_KEY, loadApp, validTravel } from "./helpers.js"
+import { API_KEY, closeApp, loadApp, validTravel } from "./helpers.js"
 
 let app
 const auth = { Authorization: `Bearer ${API_KEY}` }
+after(closeApp)
 before(async () => { app = await loadApp() })
 
 test("GET /travels restituisce solo i campi base (contratto della traccia)", async () => {
