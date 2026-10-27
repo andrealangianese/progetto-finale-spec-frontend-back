@@ -48,7 +48,7 @@ function generateSchemaFromTypes() {
   }
 
   // Generate schemas for all types
-  const schemaImports = ['import z from \'zod\';'];
+  const schemaImports = ['import { z } from \'zod\';'];
   const schemaDefinitions = [];
   const validationFunctions = [];
   const exportedValidators = [];
@@ -92,13 +92,13 @@ function generateSchemaFromTypes() {
             if (propName === 'title') {
               hasTitle.present = true;
               // Ensure title is a string
-              schemaProperties.push(`  ${propName}: z.string({ required_error: "Title is required" })${isOptional ? '.optional()' : ''},`);
+              schemaProperties.push(`  ${propName}: z.string({ error: (iss) => iss.input === undefined ? "Title is required" : undefined })${isOptional ? '.optional()' : ''},`);
               return;
             } 
             else if (propName === 'category') {
               hasCategory.present = true;
               // Ensure category is a string
-              schemaProperties.push(`  ${propName}: z.string({ required_error: "Category is required" })${isOptional ? '.optional()' : ''},`);
+              schemaProperties.push(`  ${propName}: z.string({ error: (iss) => iss.input === undefined ? "Category is required" : undefined })${isOptional ? '.optional()' : ''},`);
               return;
             }
           }
@@ -121,10 +121,10 @@ function generateSchemaFromTypes() {
     // Force add required properties if missing for exported types
     if (isExported) {
       if (!hasTitle.present) {
-        schemaProperties.push(`  title: z.string({ required_error: "Title is required" })`);
+        schemaProperties.push(`  title: z.string({ error: (iss) => iss.input === undefined ? "Title is required" : undefined })`);
       }
       if (!hasCategory.present) {
-        schemaProperties.push(`  category: z.string({ required_error: "Category is required" })`);
+        schemaProperties.push(`  category: z.string({ error: (iss) => iss.input === undefined ? "Category is required" : undefined })`);
       }
     }
 
@@ -155,7 +155,7 @@ export function ${validatorName}(data) {
   } catch (error) {
     return { 
       valid: false, 
-      errors: error.errors.map(err => ({
+      errors: error.issues.map(err => ({
         field: err.path.join('.'),
         message: err.message
       }))
@@ -255,11 +255,11 @@ function generateZodTypeForNode(typeNode, sourceFile, propName, allTypes) {
       
       // Use z.enum() for better error messages with string literals
       return `z.enum([${enumValues.map(v => `"${v}"`).join(', ')}], {
-        errorMap: () => ({ message: "${errorMsg}" })
+        error: "${errorMsg}"
       })`;
     }
     
-    return `z.union([${typeDescriptions.map(desc => `z.literal(${desc})`).join(', ')}], { invalid_type_error: "${errorMsg}" })`;
+    return `z.union([${typeDescriptions.map(desc => `z.literal(${desc})`).join(', ')}], { error: "${errorMsg}" })`;
   } 
   else if (ts.isLiteralTypeNode(typeNode)) {
     if (ts.isStringLiteral(typeNode.literal)) {
@@ -319,7 +319,7 @@ function generateZodTypeForNode(typeNode, sourceFile, propName, allTypes) {
     const typeName = typeNode.typeName.getText(sourceFile);
     
     if (typeName === 'Date') {
-      return 'z.string().datetime("Invalid date format")';
+      return 'z.iso.datetime({ error: "Invalid date format" })';
     }
     
     // Check if this is a reference to a custom type we've already defined
@@ -340,7 +340,7 @@ function generateZodTypeForNode(typeNode, sourceFile, propName, allTypes) {
           
           // Return enum directly for better validation of string literals
           return `z.enum([${enumValues.map(v => `"${v}"`).join(', ')}], {
-            errorMap: () => ({ message: "Invalid value for '${propName}'. Expected one of the allowed values for ${typeName}." })
+            error: "Invalid value for '${propName}'. Expected one of the allowed values for ${typeName}."
           })`;
         }
       }
@@ -352,7 +352,7 @@ function generateZodTypeForNode(typeNode, sourceFile, propName, allTypes) {
     return 'z.any()';
   }
   else if (typeNode.kind === ts.SyntaxKind.ObjectKeyword) {
-    return 'z.record(z.any())';
+    return 'z.record(z.string(), z.any())';
   }
   
   // For any other types

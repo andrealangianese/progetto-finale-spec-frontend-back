@@ -32,7 +32,8 @@ app.use(cors({
     origin: '*',
     credentials: true,
 }));
-app.use(express.json({ limit: 'Infinity' }));
+// Limite sul body: protegge da payload enormi (body-parser recente rifiuta 'Infinity')
+app.use(express.json({ limit: '100kb' }));
 
 // Aspetta che i dati siano caricati prima di rispondere
 app.use(async (req, res, next) => {
