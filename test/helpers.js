@@ -3,7 +3,11 @@ import { tmpdir } from "node:os"
 import path from "node:path"
 
 // Avvia l'app su una copia temporanea dei dati: i test di scrittura non toccano database/
+export const API_KEY = "test-key-123"
+
 export async function loadApp(env = {}) {
+    process.env.NODE_ENV = "test"
+    process.env.ADMIN_API_KEY = API_KEY
     process.env.DATA_DIR = mkdtempSync(path.join(tmpdir(), "langiaroad-"))
     Object.assign(process.env, env)
     const { default: app, ready } = await import("../server.js")

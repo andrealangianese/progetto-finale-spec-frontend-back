@@ -6,6 +6,10 @@ import { fileURLToPath } from "url";
 import cors from "cors";
 import morgan from "morgan";
 import { validators, readonlyProperties } from './schema.js';
+import {
+    asyncHandler, corsOptions, errorHandler, notFoundHandler,
+    rateLimiters, requireApiKey, securityHeaders,
+} from './lib/security.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -22,16 +26,20 @@ const PORT = 3001;
 // Promise di caricamento dati (assegnata dopo la definizione delle route)
 let ready;
 
+// Su Vercel le richieste passano da un proxy: serve per leggere l'IP reale (rate limit)
+if (IS_VERCEL) app.set('trust proxy', 1);
+
+const limiters = rateLimiters();
+
 // Middleware
+app.use(securityHeaders);
 app.use(
     morgan('dev', {
-        skip: (req) => req.method === 'OPTIONS',
+        skip: (req) => req.method === 'OPTIONS' || process.env.NODE_ENV === 'test',
     })
 );
-app.use(cors({
-    origin: '*',
-    credentials: true,
-}));
+app.use(cors(corsOptions()));
+app.use(limiters.read);
 // Limite sul body: protegge da payload enormi (body-parser recente rifiuta 'Infinity')
 app.use(express.json({ limit: '100kb' }));
 
@@ -203,7 +211,7 @@ const loadPromises = resourceTypes.map(type => {
     const validator = validators[type];
 
     // 📌 **POST /:resource - Create a new resource**
-    app.post(`/${pluralType}`, async (req, res) => {
+    app.post(`/${pluralType}`, limiters.write, requireApiKey, asyncHandler(async (req, res) => {
         const validationResult = validator(req.body);
         if (!validationResult.valid) {
             return res.status(400).json({
@@ -221,7 +229,7 @@ const loadPromises = resourceTypes.map(type => {
         cache[type].push(newItem);
         await saveData(type);
         res.status(201).json({ success: true, [type]: newItem });
-    });
+    }));
 
     // 📌 **GET /:resource/:id - Get a specific resource**
     app.get(`/${pluralType}/:id`, (req, res) => {
@@ -234,7 +242,7 @@ const loadPromises = resourceTypes.map(type => {
     });
 
     // 📌 **PUT /:resource/:id - Update a resource**
-    app.put(`/${pluralType}/:id`, async (req, res) => {
+    app.put(`/${pluralType}/:id`, limiters.write, requireApiKey, asyncHandler(async (req, res) => {
         const itemId = parseInt(req.params.id);
         const itemIndex = cache[type].findIndex((p) => p.id === itemId);
         if (itemIndex === -1) {
@@ -292,10 +300,10 @@ const loadPromises = resourceTypes.map(type => {
 
         await saveData(type);
         res.json({ success: true, [type]: cache[type][itemIndex] });
-    });
+    }));
 
     // 📌 **DELETE /:resource/:id - Delete a resource**
-    app.delete(`/${pluralType}/:id`, async (req, res) => {
+    app.delete(`/${pluralType}/:id`, limiters.write, requireApiKey, asyncHandler(async (req, res) => {
         const itemId = parseInt(req.params.id);
         const filteredItems = cache[type].filter((p) => p.id !== itemId);
         if (filteredItems.length === cache[type].length) {
@@ -305,7 +313,7 @@ const loadPromises = resourceTypes.map(type => {
         cache[type] = filteredItems;
         await saveData(type);
         res.json({ success: true });
-    });
+    }));
 
     // 📌 **GET /:resource - Get all resources**
     app.get(`/${pluralType}`, (req, res) => {
@@ -339,10 +347,8 @@ ready = Promise.all(loadPromises);
 ready.catch(() => {}); // evita unhandled rejection: l'errore viene gestito sotto / dal middleware
 
 // Gestore errori (es. dati non validi al caricamento)
-app.use((err, req, res, next) => {
-    console.error(err.message);
-    res.status(500).json({ success: false, error: err.message });
-});
+app.use(notFoundHandler);
+app.use(errorHandler);
 
 // Avvio solo se eseguito direttamente (node server.js), non quando importato (Vercel, test)
 const isEntryPoint = process.argv[1] && path.resolve(process.argv[1]) === __filename;
