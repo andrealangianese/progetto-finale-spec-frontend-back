@@ -1,11 +1,12 @@
 import { createFileStore } from "./file.js";
 import { createMongoStore } from "./mongo.js";
 import { createPostgresStore } from "./postgres.js";
+import type { Store } from "../types.js";
 
 // MONGODB_URI → MongoDB (es. Atlas via integrazione Vercel)
 // DATABASE_URL → Postgres
 // nessuna delle due → file JSON
-export function createStore({ dataDir, seedDir }) {
+export function createStore({ dataDir, seedDir }: { dataDir: string; seedDir: string }): Store {
     const mongoUri = process.env.MONGODB_URI;
     const postgresUrl = process.env.DATABASE_URL;
     const refreshTtlMs = Number(process.env.CACHE_TTL_MS ?? 10_000);

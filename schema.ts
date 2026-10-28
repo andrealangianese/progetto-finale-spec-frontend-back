@@ -1,6 +1,10 @@
 // THIS FILE IS AUTO-GENERATED from types.ts - DO NOT EDIT DIRECTLY
 import { z } from 'zod';
 
+export type ValidationError = { field: string; message: string };
+export type ValidationResult<T> = { valid: true; data: T } | { valid: false; errors: ValidationError[] };
+export type Validator = (data: unknown) => ValidationResult<Record<string, unknown>>;
+
 
 // Schema generated from types.ts Travel type
 export const TravelSchema = z.object({
@@ -22,27 +26,25 @@ export const TravelSchema = z.object({
 }).strict(); // Add strict mode to reject extra properties
 
 
-export function validateTravel(data) {
-  try {
-    const result = TravelSchema.parse(data);
-    return { valid: true, data: result };
-  } catch (error) {
-    return { 
-      valid: false, 
-      errors: error.issues.map(err => ({
-        field: err.path.join('.'),
-        message: err.message
-      }))
-    };
-  }
+export function validateTravel(data: unknown): ValidationResult<z.infer<typeof TravelSchema>> {
+  const result = TravelSchema.safeParse(data);
+  if (result.success) return { valid: true, data: result.data };
+  return {
+    valid: false,
+    errors: result.error.issues.map(issue => ({
+      // path può contenere simboli: String() evita un TypeError in join
+      field: issue.path.map(String).join('.'),
+      message: issue.message
+    }))
+  };
 }
 
 // Export all validators as a map for dynamic usage
-export const validators = {
+export const validators: Record<string, Validator> = {
   "travel": validateTravel
 };
 
 // Export readonly properties for each type to prevent updates
-export const readonlyProperties = {
+export const readonlyProperties: Record<string, string[]> = {
   "travel": []
 };

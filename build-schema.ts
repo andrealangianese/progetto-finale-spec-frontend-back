@@ -28,8 +28,8 @@ function generateSchemaFromTypes() {
   );
 
   // Find all type declarations (both exported and non-exported)
-  const allTypes = new Map();
-  const exportedTypes = [];
+  const allTypes = new Map<string, ts.TypeAliasDeclaration>();
+  const exportedTypes: ts.TypeAliasDeclaration[] = [];
   
   ts.forEachChild(sourceFile, node => {
     if (ts.isTypeAliasDeclaration(node)) {
@@ -49,11 +49,11 @@ function generateSchemaFromTypes() {
 
   // Generate schemas for all types
   const schemaImports = ['import { z } from \'zod\';'];
-  const schemaDefinitions = [];
-  const validationFunctions = [];
-  const exportedValidators = [];
-  const readonlyPropertiesList = [];
-  const typeSchemaMap = new Map();
+  const schemaDefinitions: string[] = [];
+  const validationFunctions: string[] = [];
+  const exportedValidators: string[] = [];
+  const readonlyPropertiesList: string[] = [];
+  const typeSchemaMap = new Map<string, string>();
 
   // First pass: Generate schemas for all types (including non-exported)
   for (const [typeName, typeDecl] of allTypes) {
@@ -61,10 +61,10 @@ function generateSchemaFromTypes() {
     const isExported = exportedTypes.includes(typeDecl);
     
     // Track readonly properties for this type
-    const readonlyProperties = [];
+    const readonlyProperties: string[] = [];
 
     // Generate Zod schema based on the properties in the type
-    const schemaProperties = [];
+    const schemaProperties: string[] = [];
     
     // Track if required properties are present for exported types
     const hasTitle = { present: false };
@@ -131,7 +131,7 @@ function generateSchemaFromTypes() {
     // Define the schema
     const schemaDefinition = `
 // Schema generated from types.ts ${typeName} type
-${isExported ? 'export ' : ''}const ${schemaName} = z.object({
+export const ${schemaName} = z.object({
   ${isExported ? 'id: z.number().optional(),\n  createdAt: z.string().optional(),\n  updatedAt: z.string().optional(),\n' : ''}${schemaProperties.join('\n')}
 }).strict(); // Add strict mode to reject extra properties`;
 
@@ -148,19 +148,17 @@ ${isExported ? 'export ' : ''}const ${schemaName} = z.object({
       exportedValidators.push(validatorName);
       
       validationFunctions.push(`
-export function ${validatorName}(data) {
-  try {
-    const result = ${schemaName}.parse(data);
-    return { valid: true, data: result };
-  } catch (error) {
-    return { 
-      valid: false, 
-      errors: error.issues.map(err => ({
-        field: err.path.join('.'),
-        message: err.message
-      }))
-    };
-  }
+export function ${validatorName}(data: unknown): ValidationResult<z.infer<typeof ${schemaName}>> {
+  const result = ${schemaName}.safeParse(data);
+  if (result.success) return { valid: true, data: result.data };
+  return {
+    valid: false,
+    errors: result.error.issues.map(issue => ({
+      // path può contenere simboli: String() evita un TypeError in join
+      field: issue.path.map(String).join('.'),
+      message: issue.message
+    }))
+  };
 }`);
     } else {
       // For non-exported types, just add the schema definition
@@ -168,38 +166,47 @@ export function ${validatorName}(data) {
     }
   }
 
-  // Generate the schema.js content
+  // Generate the schema.ts content
   const schemaContent = `// THIS FILE IS AUTO-GENERATED from types.ts - DO NOT EDIT DIRECTLY
 ${schemaImports.join('\n')}
+
+export type ValidationError = { field: string; message: string };
+export type ValidationResult<T> = { valid: true; data: T } | { valid: false; errors: ValidationError[] };
+export type Validator = (data: unknown) => ValidationResult<Record<string, unknown>>;
 
 ${schemaDefinitions.join('\n')}
 
 ${validationFunctions.join('\n')}
 
 // Export all validators as a map for dynamic usage
-export const validators = {
+export const validators: Record<string, Validator> = {
   ${exportedValidators.map(name => `"${name.replace('validate', '').toLowerCase()}": ${name}`).join(',\n  ')}
 };
 
 // Export readonly properties for each type to prevent updates
-export const readonlyProperties = {
+export const readonlyProperties: Record<string, string[]> = {
 ${readonlyPropertiesList.join(',\n')}
 };
 `;
 
-  // Write the schema.js file
-  const schemaPath = path.join(__dirname, 'schema.js');
+  // Write the schema.ts file
+  const schemaPath = path.join(__dirname, 'schema.ts');
   fs.writeFileSync(schemaPath, schemaContent);
-  console.log('Generato schema.js da types.ts');
+  console.log('Generato schema.ts da types.ts');
 }
 
 // Helper function to check if a node has a specific modifier
-function hasModifier(node, modifierKind) {
-  return node.modifiers && node.modifiers.some(mod => mod.kind === modifierKind);
+function hasModifier(node: ts.PropertySignature, modifierKind: ts.SyntaxKind): boolean {
+  return node.modifiers?.some(mod => mod.kind === modifierKind) ?? false;
 }
 
 // Generate Zod validation for different TypeScript types
-function generateZodTypeForNode(typeNode, sourceFile, propName, allTypes) {
+function generateZodTypeForNode(
+  typeNode: ts.TypeNode | undefined,
+  sourceFile: ts.SourceFile,
+  propName: string,
+  allTypes: Map<string, ts.TypeAliasDeclaration>
+): string {
   if (!typeNode) return 'z.any()';
   
   // Handle different TypeScript types
@@ -237,7 +244,7 @@ function generateZodTypeForNode(typeNode, sourceFile, propName, allTypes) {
     // Format options for error message - join with commas and 'or' for last item
     const formattedOptions = typeDescriptions.length > 1 
       ? typeDescriptions.slice(0, -1).join(', ') + ' or ' + typeDescriptions[typeDescriptions.length - 1]
-      : typeDescriptions[0];
+      : typeDescriptions[0] ?? '';
     
     // Create custom error message for the union
     const errorMsg = `Invalid value for '${propName}'. Expected ${formattedOptions}`;
@@ -290,9 +297,11 @@ function generateZodTypeForNode(typeNode, sourceFile, propName, allTypes) {
       
       // Generate type for the rest element
       const restElement = typeNode.elements[restIndex];
-      let restElementType;
+      let restElementType: string;
       
-      if (ts.isRestTypeNode(restElement) && ts.isArrayTypeNode(restElement.type)) {
+      if (!restElement) {
+        restElementType = 'z.any()';
+      } else if (ts.isRestTypeNode(restElement) && ts.isArrayTypeNode(restElement.type)) {
         // If the rest element is an array type, get the element type directly
         restElementType = generateZodTypeForNode(restElement.type.elementType, sourceFile, propName, allTypes);
       } else if (ts.isRestTypeNode(restElement)) {
@@ -327,7 +336,7 @@ function generateZodTypeForNode(typeNode, sourceFile, propName, allTypes) {
       const referencedType = allTypes.get(typeName);
       
       // Check if the referenced type is a union of string literals (like our Platform, GameMode, etc.)
-      if (referencedType.type && ts.isUnionTypeNode(referencedType.type)) {
+      if (referencedType && ts.isUnionTypeNode(referencedType.type)) {
         const allStringLiterals = referencedType.type.types.every(t => 
           ts.isLiteralTypeNode(t) && ts.isStringLiteral(t.literal)
         );

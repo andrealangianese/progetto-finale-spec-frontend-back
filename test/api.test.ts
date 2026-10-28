@@ -1,9 +1,12 @@
 import { test, before, after } from "node:test"
 import assert from "node:assert/strict"
 import request from "supertest"
+import type { Express } from "express"
+
+type Row = Record<string, unknown>
 import { API_KEY, closeApp, loadApp, validTravel } from "./helpers.js"
 
-let app
+let app: Express
 const auth = { Authorization: `Bearer ${API_KEY}` }
 after(closeApp)
 before(async () => { app = await loadApp() })
@@ -11,18 +14,18 @@ before(async () => { app = await loadApp() })
 test("GET /travels restituisce solo i campi base (contratto della traccia)", async () => {
     const res = await request(app).get("/travels").expect(200)
     assert.equal(res.body.length, 14)
-    assert.deepEqual(Object.keys(res.body[0]).sort(), ["category", "createdAt", "id", "title", "updatedAt"])
+    assert.deepEqual(Object.keys((res.body as Row[])[0] ?? {}).sort(), ["category", "createdAt", "id", "title", "updatedAt"])
 })
 
 test("GET /travels?search= filtra per titolo (case insensitive)", async () => {
     const res = await request(app).get("/travels?search=SURF").expect(200)
-    assert.deepEqual(res.body.map(t => t.id), [6])
+    assert.deepEqual((res.body as Row[]).map(t => t.id), [6])
 })
 
 test("GET /travels?category= filtra per categoria", async () => {
     const res = await request(app).get("/travels?category=trekking").expect(200)
     assert.ok(res.body.length > 0)
-    assert.ok(res.body.every(t => t.category === "Trekking"))
+    assert.ok((res.body as Row[]).every(t => t.category === "Trekking"))
 })
 
 test("GET /travels/:id restituisce il dettaglio completo", async () => {
@@ -37,7 +40,7 @@ test("GET /travels/:id inesistente → 404", async () => {
 
 test("POST con dati non validi → 400 con dettagli per campo", async () => {
     const res = await request(app).post("/travels").set(auth).send({ title: "Solo titolo" }).expect(400)
-    const campi = res.body.details.map(d => d.field)
+    const campi = (res.body.details as { field: string }[]).map(d => d.field)
     assert.ok(campi.includes("category"))
     assert.ok(campi.includes("price"))
 })
@@ -62,4 +65,11 @@ test("ciclo completo POST → PUT → DELETE", async () => {
     await request(app).put(`/travels/${id}`).set(auth).send({ price: "gratis" }).expect(400)
     await request(app).delete(`/travels/${id}`).set(auth).expect(200)
     await request(app).get(`/travels/${id}`).expect(404)
+})
+
+test("PUT con body non oggetto (array) → 400 esplicito, nessuna modifica", async () => {
+    const res = await request(app).put("/travels/1").set(auth).send([1, 2]).expect(400)
+    assert.match(res.body.error, /oggetto JSON/)
+    const after = await request(app).get("/travels/1").expect(200)
+    assert.equal(after.body.travel.destination, "Nepal")
 })
