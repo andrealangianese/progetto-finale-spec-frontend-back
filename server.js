@@ -5,6 +5,7 @@ import cors from "cors";
 import morgan from "morgan";
 import { validators, readonlyProperties } from './schema.js';
 import { createStore } from './lib/storage/index.js';
+import { describe, queryList, similar } from './lib/query.js';
 import {
     asyncHandler, corsOptions, errorHandler, notFoundHandler,
     rateLimiters, requireApiKey, securityHeaders,
@@ -175,6 +176,22 @@ const loadPromises = resourceTypes.map(type => {
         res.status(201).json({ success: true, [type]: newItem });
     }));
 
+    // 📌 **GET /:resource/meta - Categorie, range numerici e campi disponibili**
+    // (registrata prima di /:id, altrimenti "meta" verrebbe letto come id)
+    app.get(`/${pluralType}/meta`, (req, res) => {
+        res.json({ success: true, meta: describe(cache[type]) });
+    });
+
+    // 📌 **GET /:resource/:id/similar - Record simili (stessa categoria, valori vicini)**
+    app.get(`/${pluralType}/:id/similar`, (req, res) => {
+        const target = cache[type].find((p) => p.id === parseInt(req.params.id));
+        if (!target) {
+            return res.status(404).json({ success: false, message: `${type} with id '${req.params.id}' not found.` });
+        }
+        const limit = Math.min(Math.max(parseInt(req.query.limit) || 3, 1), 20);
+        res.json(similar(cache[type], target, limit));
+    });
+
     // 📌 **GET /:resource/:id - Get a specific resource**
     app.get(`/${pluralType}/:id`, (req, res) => {
         const itemId = parseInt(req.params.id);
@@ -258,27 +275,12 @@ const loadPromises = resourceTypes.map(type => {
     }));
 
     // 📌 **GET /:resource - Get all resources**
+    // Contratto originale invariato (search, category → id/title/category/date).
+    // Opzionali: ids, fields, <campo>_gte/_lte, sort/order, page/limit (totale in X-Total-Count)
     app.get(`/${pluralType}`, (req, res) => {
-        const { search, category } = req.query;
-        let filteredItems = [...cache[type]];
-
-        // Filter by category if provided
-        if (category) {
-            filteredItems = filteredItems.filter(item =>
-                item.category && item.category.toLowerCase() === category.toLowerCase()
-            );
-        }
-
-        // Search in title if search parameter is provided
-        if (search) {
-            filteredItems = filteredItems.filter(item =>
-                item.title && item.title.toLowerCase().includes(search.toLowerCase())
-            );
-        }
-
-        res.json(filteredItems.map(
-            ({ id, createdAt, updatedAt, title, category }) => ({ id, createdAt, updatedAt, title, category })
-        ));
+        const { items, total } = queryList(cache[type], req.query);
+        res.set('X-Total-Count', String(total));
+        res.json(items);
     });
 
     // Load data for this resource type
@@ -289,6 +291,16 @@ ready = Promise.all(loadPromises);
 ready.catch(() => {}); // evita unhandled rejection: l'errore viene gestito sotto / dal middleware
 
 // Gestore errori (es. dati non validi al caricamento)
+// 📌 **GET /health - Stato del servizio** (per monitoraggio e uptime check)
+app.get('/health', (req, res) => {
+    res.json({
+        status: 'ok',
+        storage: store.name,
+        uptime: Math.round(process.uptime()),
+        resources: Object.fromEntries(resourceTypes.map(type => [getPlural(type), cache[type].length])),
+    });
+});
+
 app.use(notFoundHandler);
 app.use(errorHandler);
 
