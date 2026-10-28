@@ -3,16 +3,21 @@ import assert from "node:assert/strict"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import request from "supertest"
+import type { Express } from "express"
 import pg from "pg"
 import { API_KEY, closeApp, createTestDatabase, loadApp, validTravel } from "./helpers.js"
 import { createPostgresStore } from "../lib/storage/postgres.js"
+import type { Store } from "../lib/types.js"
+
+const countLoaded = async (store: Store): Promise<number> => (await store.load("travel") as unknown[]).length
 
 // Eseguito solo con TEST_DATABASE_URL (es. postgresql://user@localhost:5432/postgres)
 const skip = !process.env.TEST_DATABASE_URL && "TEST_DATABASE_URL non impostata"
 const seedDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "database")
 const auth = { "X-API-Key": API_KEY }
 
-let app, db
+let app: Express
+let db: pg.Pool
 before(async () => {
     if (skip) return
     app = await loadApp({ CACHE_TTL_MS: "200" })
@@ -68,12 +73,12 @@ test("errore di storage → 500 e cache invariata (niente successo finto)", { sk
 test("cancellare tutto non fa ricomparire il seed al riavvio", { skip }, async () => {
     const url = await createTestDatabase()
     const first = createPostgresStore({ connectionString: url, seedDir })
-    assert.equal((await first.load("travel")).length, 14)
-    for (let id = 1; id <= 14; id++) await first.persist("travel", { op: "delete", id })
+    assert.equal(await countLoaded(first), 14)
+    for (let id = 1; id <= 14; id++) await first.persist("travel", { op: "delete", id }, [])
     await first.close()
 
     const restarted = createPostgresStore({ connectionString: url, seedDir })
-    assert.equal((await restarted.load("travel")).length, 0)
+    assert.equal(await countLoaded(restarted), 0)
     await restarted.close()
 })
 
@@ -81,8 +86,8 @@ test("due istanze che partono insieme fanno il seed una volta sola", { skip }, a
     const url = await createTestDatabase()
     const a = createPostgresStore({ connectionString: url, seedDir })
     const b = createPostgresStore({ connectionString: url, seedDir })
-    const [ra, rb] = await Promise.all([a.load("travel"), b.load("travel")])
-    assert.equal(ra.length, 14)
-    assert.equal(rb.length, 14)
+    const [na, nb] = await Promise.all([countLoaded(a), countLoaded(b)])
+    assert.equal(na, 14)
+    assert.equal(nb, 14)
     await Promise.all([a.close(), b.close()])
 })

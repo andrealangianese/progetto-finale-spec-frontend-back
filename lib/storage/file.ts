@@ -1,16 +1,17 @@
 import fs from "fs/promises";
 import { existsSync } from "fs";
 import path from "path";
+import type { Store } from "../types.js";
 
 /**
  * Storage su file JSON (default, sviluppo locale).
  * Un file per tipo: <dataDir>/<type>.json. Le scritture sono serializzate per tipo.
  * Se dataDir non è la cartella sorgente (Vercel /tmp, test) parte da una copia dei dati iniziali.
  */
-export function createFileStore({ dataDir, seedDir }) {
-    const queues = new Map(); // type → Promise dell'ultima scrittura
+export function createFileStore({ dataDir, seedDir }: { dataDir: string; seedDir: string }): Store {
+    const queues = new Map<string, Promise<void>>(); // type → ultima scrittura
 
-    const fileFor = (dir, type) => path.join(dir, `${type}.json`);
+    const fileFor = (dir: string, type: string): string => path.join(dir, `${type}.json`);
 
     return {
         name: "file",
@@ -32,9 +33,10 @@ export function createFileStore({ dataDir, seedDir }) {
             const raw = await fs.readFile(dataFile, "utf-8");
             if (!raw.trim()) return [];
             try {
-                return JSON.parse(raw);
+                return JSON.parse(raw) as unknown;
             } catch (parseError) {
-                throw new Error(`Errore di sintassi JSON nel file ${type}.json:\n${parseError.message}\nControlla la sintassi del file e assicurati che sia un JSON valido.`);
+                const detail = parseError instanceof Error ? parseError.message : String(parseError);
+                throw new Error(`Errore di sintassi JSON nel file ${type}.json:\n${detail}\nControlla la sintassi del file e assicurati che sia un JSON valido.`);
             }
         },
 

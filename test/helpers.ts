@@ -3,11 +3,12 @@ import { tmpdir } from "node:os"
 import path from "node:path"
 import { randomBytes } from "node:crypto"
 import pg from "pg"
+import type { Express } from "express"
 
 // Avvia l'app su una copia temporanea dei dati: i test di scrittura non toccano database/
 export const API_KEY = "test-key-123"
 
-export async function loadApp(env = {}) {
+export async function loadApp(env: Record<string, string> = {}): Promise<Express> {
     process.env.NODE_ENV = "test"
     process.env.ADMIN_API_KEY = API_KEY
     process.env.DATA_DIR = mkdtempSync(path.join(tmpdir(), "langiaroad-"))
@@ -24,7 +25,7 @@ export async function loadApp(env = {}) {
     return app
 }
 
-export const validTravel = {
+export const validTravel: Record<string, unknown> = {
     title: "Test Trip",
     category: "Trekking",
     destination: "Italia",
@@ -38,21 +39,23 @@ export const validTravel = {
 }
 
 // Crea un database usa-e-getta sul server indicato da TEST_DATABASE_URL
-export async function createTestDatabase() {
-    const admin = new pg.Client({ connectionString: process.env.TEST_DATABASE_URL })
+export async function createTestDatabase(): Promise<string> {
+    const adminUrl = process.env.TEST_DATABASE_URL
+    if (!adminUrl) throw new Error("TEST_DATABASE_URL non impostata")
+    const admin = new pg.Client({ connectionString: adminUrl })
     await admin.connect()
     const name = `langiaroad_test_${randomBytes(4).toString("hex")}`
     await admin.query(`CREATE DATABASE ${name}`)
     await admin.end()
-    const url = new URL(process.env.TEST_DATABASE_URL)
+    const url = new URL(adminUrl)
     url.pathname = `/${name}`
     return url.toString()
 }
 
 // Chiude le connessioni dello storage (Postgres): altrimenti il processo di test non termina
-export async function closeApp() {
+export async function closeApp(): Promise<void> {
     const { store } = await import("../server.js")
     await store.close?.()
 }
 
-export const testMongoDbName = () => `langiaroad_test_${randomBytes(4).toString("hex")}`
+export const testMongoDbName = (): string => `langiaroad_test_${randomBytes(4).toString("hex")}`

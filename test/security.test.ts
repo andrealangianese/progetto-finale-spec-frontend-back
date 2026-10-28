@@ -1,16 +1,17 @@
 import { test, before, after } from "node:test"
 import assert from "node:assert/strict"
 import request from "supertest"
+import type { Express, NextFunction, Request, Response } from "express"
 import { API_KEY, closeApp, loadApp, validTravel } from "./helpers.js"
 import { asyncHandler } from "../lib/security.js"
 
-let app
+let app: Express
 after(closeApp)
 before(async () => { app = await loadApp({ ALLOWED_ORIGINS: "https://langiaroad.app" }) })
 
 test("scrittura senza chiave → 401 con WWW-Authenticate", async () => {
     const res = await request(app).post("/travels").send(validTravel).expect(401)
-    assert.match(res.headers["www-authenticate"], /Bearer/)
+    assert.match(res.headers["www-authenticate"] ?? "", /Bearer/)
 })
 
 test("chiave errata → 401 (anche su PUT e DELETE)", async () => {
@@ -72,7 +73,11 @@ test("rotta sconosciuta → 404 JSON", async () => {
 
 test("asyncHandler inoltra gli errori invece di lasciare la richiesta appesa", async () => {
     const boom = new Error("boom")
-    let forwarded
-    await asyncHandler(async () => { throw boom })({}, {}, (err) => { forwarded = err })
+    // attende esplicitamente la chiamata a next(err): non dipende da cosa restituisce l'handler
+    const forwarded = await new Promise<unknown>((resolve, reject) => {
+        const next: NextFunction = (err?: unknown) => resolve(err)
+        asyncHandler(async () => { throw boom })({} as Request, {} as Response, next)
+        setTimeout(() => reject(new Error("next(err) non è stato chiamato")), 1000)
+    })
     assert.equal(forwarded, boom)
 })
