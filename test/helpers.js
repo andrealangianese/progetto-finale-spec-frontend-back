@@ -13,6 +13,11 @@ export async function loadApp(env = {}) {
     process.env.DATA_DIR = mkdtempSync(path.join(tmpdir(), "langiaroad-"))
     // TEST_DATABASE_URL impostata → stessa suite su Postgres, con un database nuovo per file di test
     if (process.env.TEST_DATABASE_URL) process.env.DATABASE_URL = await createTestDatabase()
+    // TEST_MONGODB_URI impostata → stessa suite su MongoDB, con un database nuovo per file di test
+    if (process.env.TEST_MONGODB_URI) {
+        process.env.MONGODB_URI = process.env.TEST_MONGODB_URI
+        process.env.MONGODB_DB = testMongoDbName()
+    }
     Object.assign(process.env, env)
     const { default: app, ready } = await import("../server.js")
     await ready
@@ -49,3 +54,5 @@ export async function closeApp() {
     const { store } = await import("../server.js")
     await store.close?.()
 }
+
+export const testMongoDbName = () => `langiaroad_test_${randomBytes(4).toString("hex")}`

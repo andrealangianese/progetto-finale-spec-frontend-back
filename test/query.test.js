@@ -79,6 +79,6 @@ test("GET /travels/:id/similar: stessa categoria prima, escluso se stesso", asyn
 test("GET /health", async () => {
     const res = await request(app).get("/health").expect(200)
     assert.equal(res.body.status, "ok")
-    assert.equal(res.body.storage, process.env.DATABASE_URL ? "postgres" : "file")
+    assert.equal(res.body.storage, process.env.MONGODB_URI ? "mongodb" : process.env.DATABASE_URL ? "postgres" : "file")
     assert.equal(res.body.resources.travels, 14)
 })

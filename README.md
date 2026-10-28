@@ -93,10 +93,22 @@ Parametri non validi → `400` con l'elenco dei valori ammessi.
 
 | Modalità | Quando | Note |
 |---|---|---|
-| File JSON | `DATABASE_URL` non impostata | `database/<tipo>.json`. Su Vercel finisce in `/tmp`, che si azzera a ogni cold start |
-| Postgres | `DATABASE_URL` impostata | Persistente. Tabelle create e dati iniziali caricati automaticamente al primo avvio |
+| File JSON | nessuna variabile | `database/<tipo>.json`. Su Vercel finisce in `/tmp`, che si azzera a ogni cold start |
+| MongoDB | `MONGODB_URI` | Una collection per tipo, `_id` = id numerico. Va bene MongoDB Atlas con l'integrazione nativa di Vercel |
+| Postgres | `DATABASE_URL` | Una riga `jsonb` per record. Va bene Neon, Supabase o Vercel Postgres |
 
-Con Postgres ogni istanza serverless ricarica la propria cache al massimo ogni `CACHE_TTL_MS` (default 10s). Funziona con qualsiasi Postgres: Neon, Supabase, Vercel Postgres.
+Per i database vale quanto segue:
+- Al primo avvio vengono creati in automatico la struttura e i dati iniziali (`database/*.json`), una volta sola.
+- Ogni istanza serverless ricarica la propria cache al massimo ogni `CACHE_TTL_MS` (default 10s).
+- Impostare **entrambe** le variabili è un errore: il server non parte, invece di scegliere in silenzio.
+
+### MongoDB Atlas su Vercel
+
+1. Vercel → progetto backend → **Storage** → **Create Database** → **MongoDB Atlas** (Marketplace).
+2. Scegli piano (Free va bene), regione (la stessa delle Functions) e nome del database, poi collega il progetto: l'integrazione crea `MONGODB_URI`.
+3. Se esiste, rimuovi `DATABASE_URL`, poi fai **Redeploy**.
+4. Controlla `GET /health`: deve rispondere `"storage": "mongodb"`.
+5. In locale: `vercel env pull .env.local` per avere `MONGODB_URI`.
 
 ## ⚙️ Configurazione
 
@@ -105,7 +117,8 @@ Copia `.env.example` e imposta le variabili. In produzione su Vercel vanno in *P
 | Variabile | Obbligatoria | Descrizione |
 |---|---|---|
 | `ADMIN_API_KEY` | in produzione, per scrivere | Chiave per le scritture |
-| `DATABASE_URL` | consigliata in produzione | Connessione Postgres |
+| `MONGODB_URI` *oppure* `DATABASE_URL` | consigliata in produzione | Connessione MongoDB o Postgres |
+| `MONGODB_DB` | no | Nome del database Mongo, se non è già nell'URI (default `langiaroad`) |
 | `ALLOWED_ORIGINS` | consigliata | Domini del frontend, separati da virgola |
 | `CACHE_TTL_MS`, `RATE_LIMIT_READ`, `RATE_LIMIT_WRITE` | no | Tuning |
 
@@ -114,9 +127,10 @@ Copia `.env.example` e imposta le variabili. In produzione su Vercel vanno in *P
 ```bash
 npm test                                                             # storage su file
 TEST_DATABASE_URL=postgresql://user@localhost:5432/postgres npm test # anche su Postgres reale
+TEST_MONGODB_URI=mongodb://localhost:27017 npm test                  # anche su MongoDB reale
 ```
 
-Test di integrazione con `node:test` e supertest su API, sicurezza, rate limit, query e storage. Con `TEST_DATABASE_URL` ogni file di test gira su un database creato al momento.
+Test di integrazione con `node:test` e supertest su API, sicurezza, rate limit, query e storage. Con `TEST_DATABASE_URL` o `TEST_MONGODB_URI` ogni file di test gira su un database creato al momento.
 
 ## 🔄 Generazione Automatica degli Schemi
 
