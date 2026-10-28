@@ -51,6 +51,23 @@ npm run start
 
 Il server sarà disponibile all'indirizzo: **http://localhost:3001**
 
+| Script | Cosa fa |
+|---|---|
+| `npm start` | Rigenera `schema.ts` e avvia il server con tsx |
+| `npm run dev` | Come `start`, con riavvio automatico a ogni modifica |
+| `npm run typecheck` | Type check TypeScript (`strict`) senza emettere file |
+| `npm test` | Type check + test di integrazione |
+| `npm run build-schema` | Rigenera solo `schema.ts` da `types.ts` |
+
+## 🟦 TypeScript
+
+Il backend è scritto in TypeScript `strict` (più `noUncheckedIndexedAccess` e `noUnusedLocals`).
+
+- **In locale** il codice gira direttamente con [tsx](https://tsx.is), senza un passaggio di build.
+- **Su Vercel** `@vercel/node` compila `server.ts` da solo. Attenzione: Vercel **non blocca il deploy sugli errori di tipo**, quindi il controllo vero è `npm test` (o `npm run typecheck`), da far passare prima del merge.
+- Negli import tra file si usa l'estensione `.js` (`import { x } from "./lib/query.js"`) anche se il file è `.ts`: è la convenzione di Node per gli ES module, che TypeScript risolve da solo.
+- I tipi condivisi (`Resource`, `Store`, `Change`) sono in `lib/types.ts`.
+
 ## 📊 API Disponibili
 
 Per ogni risorsa definita in `types.ts` (qui `Travel` → `/travels`):
@@ -130,13 +147,13 @@ TEST_DATABASE_URL=postgresql://user@localhost:5432/postgres npm test # anche su 
 TEST_MONGODB_URI=mongodb://localhost:27017 npm test                  # anche su MongoDB reale
 ```
 
-Test di integrazione con `node:test` e supertest su API, sicurezza, rate limit, query e storage. Con `TEST_DATABASE_URL` o `TEST_MONGODB_URI` ogni file di test gira su un database creato al momento.
+`npm test` esegue prima il type check e poi i test di integrazione con `node:test` e supertest su API, sicurezza, rate limit, query e storage. Con `TEST_DATABASE_URL` o `TEST_MONGODB_URI` ogni file di test gira su un database creato al momento.
 
 ## 🔄 Generazione Automatica degli Schemi
 
-Quando avvii il server, il file `schema.js` viene generato automaticamente basandosi sui tipi definiti in `types.ts`. Questo schema viene utilizzato per la validazione dei dati inviati alle API.
+Quando avvii il server, il file `schema.ts` viene generato automaticamente basandosi sui tipi definiti in `types.ts`. Contiene gli schemi zod e i validator tipizzati usati per validare i dati inviati alle API.
 
-Non modificare direttamente il file `schema.js` in quanto verrà sovrascritto ad ogni avvio del server.
+Non modificare direttamente `schema.ts`: viene sovrascritto a ogni avvio. Va però **committato**, perché su Vercel il generatore non viene eseguito.
 
 ## 📝 Note Aggiuntive
 
