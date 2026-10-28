@@ -5,7 +5,8 @@
   "scripts": {
     "build-schema": "node build-schema.js",
     "start": "npm run build-schema && node server.js",
-    "dev": "npm run build-schema && node --watch server.js"
+    "dev": "npm run build-schema && node --watch server.js",
+    "test": "node --test --test-timeout=10000 \"test/**/*.test.js\""
   },
   "type": "module",
   "keywords": [],
@@ -13,12 +14,18 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@vercel/functions": "^3.1.4",
     "cors": "^2.8.5",
     "express": "^4.18.2",
+    "express-rate-limit": "^7.5.1",
+    "helmet": "^8.1.0",
+    "mongodb": "^6.20.0",
     "morgan": "^1.10.0",
-    "zod": "^3.22.4"
+    "pg": "^8.16.3",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
+    "supertest": "^7.1.4",
     "typescript": "^5.8.2"
   }
 }

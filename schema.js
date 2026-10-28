@@ -1,5 +1,5 @@
 // THIS FILE IS AUTO-GENERATED from types.ts - DO NOT EDIT DIRECTLY
-import z from 'zod';
+import { z } from 'zod';
 
 
 // Schema generated from types.ts Travel type
@@ -7,13 +7,13 @@ export const TravelSchema = z.object({
   id: z.number().optional(),
   createdAt: z.string().optional(),
   updatedAt: z.string().optional(),
-  title: z.string({ required_error: "Title is required" }),
-  category: z.string({ required_error: "Category is required" }),
+  title: z.string({ error: (iss) => iss.input === undefined ? "Title is required" : undefined }),
+  category: z.string({ error: (iss) => iss.input === undefined ? "Category is required" : undefined }),
   destination: z.string(),
   durationDay: z.number(),
   price: z.number(),
   difficulty: z.enum(["Facile", "Intermedio", "Difficile", "Estremo"], {
-        errorMap: () => ({ message: "Invalid value for 'difficulty'. Expected 'Facile', 'Intermedio', 'Difficile' or 'Estremo'" })
+        error: "Invalid value for 'difficulty'. Expected 'Facile', 'Intermedio', 'Difficile' or 'Estremo'"
       }),
   adrenalineLevel: z.number(),
   image: z.string(),
@@ -29,7 +29,7 @@ export function validateTravel(data) {
   } catch (error) {
     return { 
       valid: false, 
-      errors: error.errors.map(err => ({
+      errors: error.issues.map(err => ({
         field: err.path.join('.'),
         message: err.message
       }))

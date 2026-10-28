@@ -1,11 +1,15 @@
 import express from "express";
-import fs from "fs/promises";
-import { existsSync } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import cors from "cors";
 import morgan from "morgan";
 import { validators, readonlyProperties } from './schema.js';
+import { createStore } from './lib/storage/index.js';
+import { describe, queryList, similar } from './lib/query.js';
+import {
+    asyncHandler, corsOptions, errorHandler, notFoundHandler,
+    rateLimiters, requireApiKey, securityHeaders,
+} from './lib/security.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -13,7 +17,8 @@ const __dirname = path.dirname(__filename);
 // Su Vercel il filesystem di /var/task è di sola lettura: si scrive solo in /tmp
 const IS_VERCEL = !!process.env.VERCEL;
 const SRC_DB_DIR = path.join(__dirname, 'database');        // file iniziali (sola lettura su Vercel)
-const DB_DIR = IS_VERCEL ? '/tmp/database' : SRC_DB_DIR;    // cartella scrivibile
+// DATA_DIR permette di puntare a una cartella diversa (es. una copia temporanea nei test)
+const DB_DIR = process.env.DATA_DIR || (IS_VERCEL ? '/tmp/database' : SRC_DB_DIR);    // cartella scrivibile
 
 const app = express();
 const PORT = 3001;
@@ -21,33 +26,39 @@ const PORT = 3001;
 // Promise di caricamento dati (assegnata dopo la definizione delle route)
 let ready;
 
+// Su Vercel le richieste passano da un proxy: serve per leggere l'IP reale (rate limit)
+if (IS_VERCEL) app.set('trust proxy', 1);
+
+const limiters = rateLimiters();
+
 // Middleware
+app.use(securityHeaders);
 app.use(
     morgan('dev', {
-        skip: (req) => req.method === 'OPTIONS',
+        skip: (req) => req.method === 'OPTIONS' || process.env.NODE_ENV === 'test',
     })
 );
-app.use(cors({
-    origin: '*',
-    credentials: true,
-}));
-app.use(express.json({ limit: 'Infinity' }));
+app.use(cors(corsOptions()));
+app.use(limiters.read);
+// Limite sul body: protegge da payload enormi (body-parser recente rifiuta 'Infinity')
+app.use(express.json({ limit: '100kb' }));
 
-// Aspetta che i dati siano caricati prima di rispondere
+// Aspetta che i dati siano caricati (e, con Postgres, aggiornati) prima di rispondere
 app.use(async (req, res, next) => {
     try {
         await ready;
+        await refreshIfStale();
         next();
     } catch (e) {
         next(e);
     }
 });
 
+// **Storage**: file JSON in locale, Postgres se è impostata DATABASE_URL
+const store = createStore({ dataDir: DB_DIR, seedDir: SRC_DB_DIR });
+
 // **CACHE in memoria** for each resource type
 const cache = {};
-
-// **Coda per scritture asincrone** for each resource type
-const writeQueues = {};
 
 // Helper to get plural form (basic pluralization rules)
 function getPlural(singular) {
@@ -63,21 +74,10 @@ function getPlural(singular) {
 // Extract resource types from validators
 const resourceTypes = Object.keys(validators);
 
-// Initialize cache and write queues for each resource type
+// Initialize cache for each resource type
 resourceTypes.forEach(type => {
     cache[type] = [];
-    writeQueues[type] = [];
 });
-
-// **Gestore della coda di scrittura**
-const processWriteQueue = async (type) => {
-    if (writeQueues[type].length === 0) return;
-    const task = writeQueues[type].shift(); // Prende la prima operazione in coda
-    await task(); // Esegue l'operazione
-    if (writeQueues[type].length > 0) {
-        setImmediate(() => processWriteQueue(type)); // Continua con la prossima operazione
-    }
-};
 
 // Helper function to format validation errors in a readable way
 function formatValidationErrors(errors) {
@@ -101,99 +101,50 @@ function formatValidationErrors(errors) {
     return formattedMessage;
 }
 
-// **Caricare i dati all'avvio**
+// **Caricare e validare i dati** (all'avvio e, con Postgres, quando la cache scade)
 const loadData = async (type) => {
-    const dbDir = DB_DIR;
-    const dataFile = path.join(dbDir, `${type}.json`);
-    const srcFile = path.join(SRC_DB_DIR, `${type}.json`);
-    try {
-        // Check if database directory exists, create it if not
-        if (!existsSync(dbDir)) {
-            await fs.mkdir(dbDir, { recursive: true });
-            console.log(`Directory del database creata.`);
-        }
+    const loadedData = await store.load(type);
 
-        // Su Vercel copia il file iniziale in /tmp al primo avvio
-        if (IS_VERCEL && !existsSync(dataFile) && existsSync(srcFile)) {
-            await fs.copyFile(srcFile, dataFile);
-        }
-
-        if (existsSync(dataFile)) {
-            const data = await fs.readFile(dataFile, "utf-8");
-            if (data.trim()) {
-                try {
-                    const loadedData = JSON.parse(data);
-
-                    // Verifica che i dati caricati siano in formato array
-                    if (!Array.isArray(loadedData)) {
-                        throw new Error(`Errore di struttura nel file ${type}.json: il file deve contenere un array.`);
-                    } else {
-                        // Valida ogni elemento nell'array usando il validator appropriato
-                        const validator = validators[type];
-                        const invalidItems = [];
-
-                        for (let i = 0; i < loadedData.length; i++) {
-                            const item = loadedData[i];
-                            const validationResult = validator(item);
-                            if (!validationResult.valid) {
-                                invalidItems.push({
-                                    index: i,
-                                    id: item.id || 'sconosciuto',
-                                    errors: validationResult.errors
-                                });
-                            }
-                        }
-
-                        if (invalidItems.length > 0) {
-                            let errorMessage = `\n⛔ Errori di validazione nel file ${type}.json. Il server non può partire.\n`;
-
-                            invalidItems.forEach(item => {
-                                errorMessage += `\n🚫 Elemento #${item.index + 1} (ID: ${item.id}) non valido:`;
-                                errorMessage += formatValidationErrors(item.errors);
-                                errorMessage += "\n";
-                            });
-
-                            errorMessage += `\nCorreggi questi errori nel file database/${type}.json per avviare il server.`;
-                            throw new Error(errorMessage);
-                        }
-
-                        cache[type] = loadedData;
-                    }
-                } catch (parseError) {
-                    throw new Error(`Errore di sintassi JSON nel file ${type}.json:\n${parseError.message}\nControlla la sintassi del file e assicurati che sia un JSON valido.`);
-                }
-            } else {
-                cache[type] = [];
-            }
-        } else {
-            cache[type] = [];
-            await saveData(type); // Create empty file
-            console.log(`Creato file dati vuoto per ${type}.`);
-        }
-    } catch (error) {
-        // Rilancia l'errore per gestirlo nel Promise.all
-        throw error;
+    // Verifica che i dati caricati siano in formato array
+    if (!Array.isArray(loadedData)) {
+        throw new Error(`Errore di struttura nei dati di ${type}: deve essere un array.`);
     }
-};
 
-// **Salvare i dati nel file (usando la coda)**
-const saveData = async (type) => {
-    return new Promise((resolve) => {
-        writeQueues[type].push(async () => {
-            try {
-                const dataFile = path.join(DB_DIR, `${type}.json`);
-                await fs.writeFile(dataFile, JSON.stringify(cache[type], null, 2), "utf-8");
-                console.log(`Dati salvati in ${type}.json.`);
-            } catch (error) {
-                console.error(`⚠️ Errore nel salvare i dati per ${type}:`, error);
-            }
-            resolve();
-        });
-        if (writeQueues[type].length === 1) {
-            processWriteQueue(type); // Avvia la scrittura solo se la coda era vuota
+    // Valida ogni elemento nell'array usando il validator appropriato
+    const validator = validators[type];
+    const invalidItems = [];
+    loadedData.forEach((item, i) => {
+        const validationResult = validator(item);
+        if (!validationResult.valid) {
+            invalidItems.push({ index: i, id: item.id || 'sconosciuto', errors: validationResult.errors });
         }
     });
+
+    if (invalidItems.length > 0) {
+        let errorMessage = `\n⛔ Errori di validazione nei dati di ${type}. Il server non può partire.\n`;
+        invalidItems.forEach(item => {
+            errorMessage += `\n🚫 Elemento #${item.index + 1} (ID: ${item.id}) non valido:`;
+            errorMessage += formatValidationErrors(item.errors);
+            errorMessage += "\n";
+        });
+        errorMessage += `\nCorreggi questi errori nei dati di ${type} per avviare il server.`;
+        throw new Error(errorMessage);
+    }
+
+    cache[type] = loadedData;
 };
+
+// Con uno storage condiviso (Postgres) più istanze serverless hanno ognuna la propria cache:
+// la ricarico al massimo ogni refreshTtlMs (consistenza eventuale). Una sola ricarica alla volta.
+let lastLoadAt = Date.now();
+let refreshing = null;
+async function refreshIfStale() {
+    if (!store.refreshTtlMs || Date.now() - lastLoadAt < store.refreshTtlMs) return;
+    refreshing ??= Promise.all(resourceTypes.map(loadData))
+        .then(() => { lastLoadAt = Date.now(); })
+        .finally(() => { refreshing = null; });
+    await refreshing;
+}
 
 // Dynamically create routes for each resource type
 const loadPromises = resourceTypes.map(type => {
@@ -201,7 +152,7 @@ const loadPromises = resourceTypes.map(type => {
     const validator = validators[type];
 
     // 📌 **POST /:resource - Create a new resource**
-    app.post(`/${pluralType}`, async (req, res) => {
+    app.post(`/${pluralType}`, limiters.write, requireApiKey, asyncHandler(async (req, res) => {
         const validationResult = validator(req.body);
         if (!validationResult.valid) {
             return res.status(400).json({
@@ -210,15 +161,35 @@ const loadPromises = resourceTypes.map(type => {
             });
         }
 
-        const newItem = req.body;
+        // Uso i dati validati dallo schema, non il body grezzo
+        const newItem = { ...validationResult.data };
         // Creazione ID univoco
         newItem.id = (cache[type].length > 0 ? Math.max(...cache[type].map((t) => parseInt(t.id) || 0)) + 1 : 1);
         const creationDate = new Date();
         newItem.createdAt = creationDate.toISOString();
         newItem.updatedAt = creationDate.toISOString();
-        cache[type].push(newItem);
-        await saveData(type);
+
+        // Prima salvo, poi aggiorno la cache: se lo storage fallisce la cache resta coerente
+        const nextItems = [...cache[type], newItem];
+        await store.persist(type, { op: 'insert', item: newItem }, nextItems);
+        cache[type] = nextItems;
         res.status(201).json({ success: true, [type]: newItem });
+    }));
+
+    // 📌 **GET /:resource/meta - Categorie, range numerici e campi disponibili**
+    // (registrata prima di /:id, altrimenti "meta" verrebbe letto come id)
+    app.get(`/${pluralType}/meta`, (req, res) => {
+        res.json({ success: true, meta: describe(cache[type]) });
+    });
+
+    // 📌 **GET /:resource/:id/similar - Record simili (stessa categoria, valori vicini)**
+    app.get(`/${pluralType}/:id/similar`, (req, res) => {
+        const target = cache[type].find((p) => p.id === parseInt(req.params.id));
+        if (!target) {
+            return res.status(404).json({ success: false, message: `${type} with id '${req.params.id}' not found.` });
+        }
+        const limit = Math.min(Math.max(parseInt(req.query.limit) || 3, 1), 20);
+        res.json(similar(cache[type], target, limit));
     });
 
     // 📌 **GET /:resource/:id - Get a specific resource**
@@ -232,7 +203,7 @@ const loadPromises = resourceTypes.map(type => {
     });
 
     // 📌 **PUT /:resource/:id - Update a resource**
-    app.put(`/${pluralType}/:id`, async (req, res) => {
+    app.put(`/${pluralType}/:id`, limiters.write, requireApiKey, asyncHandler(async (req, res) => {
         const itemId = parseInt(req.params.id);
         const itemIndex = cache[type].findIndex((p) => p.id === itemId);
         if (itemIndex === -1) {
@@ -282,51 +253,34 @@ const loadPromises = resourceTypes.map(type => {
 
         // Update timestamp and merge changes with existing item
         const now = new Date().toISOString();
-        cache[type][itemIndex] = {
-            ...cache[type][itemIndex],
-            ...updatedFields,
-            updatedAt: now
-        };
+        const updatedItem = { ...oldItem, ...updatedFields, updatedAt: now };
 
-        await saveData(type);
-        res.json({ success: true, [type]: cache[type][itemIndex] });
-    });
+        const nextItems = cache[type].map((p, i) => (i === itemIndex ? updatedItem : p));
+        await store.persist(type, { op: 'update', item: updatedItem }, nextItems);
+        cache[type] = nextItems;
+        res.json({ success: true, [type]: updatedItem });
+    }));
 
     // 📌 **DELETE /:resource/:id - Delete a resource**
-    app.delete(`/${pluralType}/:id`, async (req, res) => {
+    app.delete(`/${pluralType}/:id`, limiters.write, requireApiKey, asyncHandler(async (req, res) => {
         const itemId = parseInt(req.params.id);
         const filteredItems = cache[type].filter((p) => p.id !== itemId);
         if (filteredItems.length === cache[type].length) {
             return res.status(404).json({ success: false, message: `${type} with id '${itemId}' not found.` });
         }
 
+        await store.persist(type, { op: 'delete', id: itemId }, filteredItems);
         cache[type] = filteredItems;
-        await saveData(type);
         res.json({ success: true });
-    });
+    }));
 
     // 📌 **GET /:resource - Get all resources**
+    // Contratto originale invariato (search, category → id/title/category/date).
+    // Opzionali: ids, fields, <campo>_gte/_lte, sort/order, page/limit (totale in X-Total-Count)
     app.get(`/${pluralType}`, (req, res) => {
-        const { search, category } = req.query;
-        let filteredItems = [...cache[type]];
-
-        // Filter by category if provided
-        if (category) {
-            filteredItems = filteredItems.filter(item =>
-                item.category && item.category.toLowerCase() === category.toLowerCase()
-            );
-        }
-
-        // Search in title if search parameter is provided
-        if (search) {
-            filteredItems = filteredItems.filter(item =>
-                item.title && item.title.toLowerCase().includes(search.toLowerCase())
-            );
-        }
-
-        res.json(filteredItems.map(
-            ({ id, createdAt, updatedAt, title, category }) => ({ id, createdAt, updatedAt, title, category })
-        ));
+        const { items, total } = queryList(cache[type], req.query);
+        res.set('X-Total-Count', String(total));
+        res.json(items);
     });
 
     // Load data for this resource type
@@ -337,12 +291,23 @@ ready = Promise.all(loadPromises);
 ready.catch(() => {}); // evita unhandled rejection: l'errore viene gestito sotto / dal middleware
 
 // Gestore errori (es. dati non validi al caricamento)
-app.use((err, req, res, next) => {
-    console.error(err.message);
-    res.status(500).json({ success: false, error: err.message });
+// 📌 **GET /health - Stato del servizio** (per monitoraggio e uptime check)
+app.get('/health', (req, res) => {
+    res.json({
+        status: 'ok',
+        storage: store.name,
+        uptime: Math.round(process.uptime()),
+        resources: Object.fromEntries(resourceTypes.map(type => [getPlural(type), cache[type].length])),
+    });
 });
 
-if (!IS_VERCEL) {
+app.use(notFoundHandler);
+app.use(errorHandler);
+
+// Avvio solo se eseguito direttamente (node server.js), non quando importato (Vercel, test)
+const isEntryPoint = process.argv[1] && path.resolve(process.argv[1]) === __filename;
+
+if (!IS_VERCEL && isEntryPoint) {
     // Avvio locale
     ready
         .then(() => {
@@ -361,5 +326,6 @@ if (!IS_VERCEL) {
         });
 }
 
-// Vercel usa l'app esportata come handler
+// Vercel usa l'app esportata come handler; i test attendono `ready` prima delle richieste
+export { ready, store };
 export default app;
